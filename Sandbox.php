@@ -17,6 +17,7 @@ use WP_Admin_Bar;
  * @package AncientWorks\Artifact
  * @since 0.0.1
  * @author ancientworks <mail@ancient.works>
+ * @link https://github.com/artifact-modules/oxygen-sandbox
  */
 class Sandbox extends Module
 {
@@ -87,14 +88,13 @@ class Sandbox extends Module
 			wp_register_script(self::$module_id . '-admin', plugins_url("/Modules/OxygenSandbox/assets/js/admin.js", ARTIFACT_FILE), [
 				'artifact/dashboard'
 			], false, true);
-			wp_register_script(self::$module_id . '-oygen-editor', plugins_url("/Modules/OxygenSandbox/assets/js/oxygen-editor.js", ARTIFACT_FILE));
 		});
-
-		$this->actions();
 	}
 
 	public function boot()
 	{
+		$this->actions();
+
 		Admin::$enqueue_styles[] = self::$module_id . '-admin';
 		Admin::$enqueue_scripts[] = self::$module_id . '-admin';
 		Admin::$localize_scripts[] = [
@@ -139,7 +139,7 @@ class Sandbox extends Module
 
 			add_action('wp_enqueue_scripts', function () use ($available_sessions) {
 				wp_enqueue_style(self::$module_id . "-oygen-editor");
-				wp_enqueue_script(self::$module_id . "-oygen-editor");
+				wp_enqueue_script(self::$module_id . "-oygen-editor", plugins_url("/Modules/OxygenSandbox/assets/js/oxygen-editor.js", ARTIFACT_FILE), [], false, true);
 				wp_localize_script(self::$module_id . "-oygen-editor", 'sandbox', [
 					'session' => $available_sessions['sessions'][$this->selected_session],
 				]);
@@ -282,7 +282,7 @@ class Sandbox extends Module
 
 	protected function is_active(): bool
 	{
-		if ($this->get_sandbox_sessions() && current_user_can('manage_options')) {
+		if ($this->get_sandbox_sessions()['selected'] && current_user_can('manage_options')) {
 			return true;
 		}
 
