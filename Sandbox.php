@@ -2,9 +2,14 @@
 
 namespace AncientWorks\Artifact\Modules\OxygenSandbox;
 
+use AncientWorks\Artifact\Admin;
+use AncientWorks\Artifact\Admin\DashboardController;
 use AncientWorks\Artifact\Artifact;
 use AncientWorks\Artifact\Module;
 use AncientWorks\Artifact\Utils\DB;
+use AncientWorks\Artifact\Utils\Notice;
+use AncientWorks\Artifact\Utils\OxygenBuilder;
+use AncientWorks\Artifact\Utils\Utils;
 use Composer\Semver\Comparator;
 use WP_Admin_Bar;
 
@@ -17,26 +22,267 @@ class Sandbox extends Module
 {
 	public static $module_id = 'oxygen_sandbox';
 	public static $module_version = '0.0.1';
-    public static $module_name = 'Oxygen Builder Sandbox';
+	public static $module_name = 'Oxygen Builder Sandbox';
 
 	protected string $option_name = 'artifact_sandbox_sessions';
 
 	protected bool $active = false;
 
-	protected $selected_session;
+	public $selected_session;
+	public $sessions = null;
 
 	protected $string_prefix = [
-		'options' => ['oxygen_vsb_', 'ct_'],
-		'post_metadata' => ['ct_'],
+		'options' => [
+			'oxygen_vsb_', // oxygen builder
+			'ct_',
+			'bricks_', // bricks builder
+			'theme_mods_bricks',
+			'brizy', // brizy builder
+			'zionbuilder_', // zion builder
+			'_zionbuilder_',
+		],
+		'post_metadata' => [
+			'ct_',  // oxygen builder
+			'_bricks_', // bricks builder
+			'brizy', // brizy builder
+			'zionbuilder_', // zion builder
+			'_zionbuilder_',
+		],
 	];
 
-	// public function __construct()
-	// {
-	// }
+	protected function actions()
+	{
+		if (!function_exists('wp_get_current_user')) {
+			include_once ABSPATH . 'wp-includes/pluggable.php';
+		}
+
+		$available_sessions = $this->get_sandbox_sessions();
+
+		if (
+			!empty($_REQUEST['page'])
+			&& $_REQUEST['page'] === Artifact::$slug
+			&& !empty($_REQUEST['route'])
+			&& $_REQUEST['route'] === 'dashboard'
+			&& !empty($_REQUEST['module_id'])
+			&& $_REQUEST['module_id'] === self::$module_id
+			&& current_user_can('manage_options')
+		) {
+			if (
+				!empty($_REQUEST['action'])
+				&& $_REQUEST['action'] === 'export'
+				&& !empty($_REQUEST['session'])
+				&& array_key_exists($_REQUEST['session'], $available_sessions['sessions'])
+			) {
+				$this->export_changes($_REQUEST['session']);
+				exit;
+			}
+		}
+	}
+
+	public function register()
+	{
+		add_action('admin_enqueue_scripts', function () {
+			wp_register_style(self::$module_id . '-admin', plugins_url("/Modules/OxygenSandbox/assets/css/admin.css", ARTIFACT_FILE));
+			wp_register_style(self::$module_id . '-oygen-editor', plugins_url("/Modules/OxygenSandbox/assets/css/admin.css", ARTIFACT_FILE));
+			wp_register_script(self::$module_id . '-admin', plugins_url("/Modules/OxygenSandbox/assets/js/admin.js", ARTIFACT_FILE), [
+				'artifact/dashboard'
+			], false, true);
+			wp_register_script(self::$module_id . '-oygen-editor', plugins_url("/Modules/OxygenSandbox/assets/js/oxygen-editor.js", ARTIFACT_FILE));
+		});
+
+		$this->actions();
+	}
+
+	public function boot()
+	{
+		Admin::$enqueue_styles[] = self::$module_id . '-admin';
+		Admin::$enqueue_scripts[] = self::$module_id . '-admin';
+		Admin::$localize_scripts[] = [
+			'handle' => self::$module_id . '-admin',
+			'object_name' => 'sandbox',
+			'l10n' => [$this, 'localize_script'],
+		];
+
+		add_action('plugins_loaded', [$this, 'add_action_plugins_loaded']);
+
+		DashboardController::registerModulePanel('grid', self::$module_id, self::$module_id . '::panel', [$this, 'handlePanel']);
+	}
+
+	public function add_action_plugins_loaded()
+	{
+		if (!$this->get_sandbox_sessions()) {
+			$this->selected_session = $this->init_sessions();
+		}
+
+		$this->selected_session = $this->get_sandbox_sessions()['selected'];
+
+		$this->active = $this->is_active();
+
+		add_action('init', [$this, 'add_action_init']);
+	}
+
+	public function add_action_init()
+	{
+		if (current_user_can('manage_options')) {
+			if (Utils::is_request('ajax')) {
+				add_action("wp_ajax_" . self::$module_id . "_update_session", [$this, 'ajax_update_session']);
+				add_action("wp_ajax_" . self::$module_id . "_rename_session", [$this, 'ajax_rename_session']);
+			}
+		}
+
+		if (!$this->active) {
+			return;
+		}
+
+		if (Utils::is_request('frontend') && OxygenBuilder::is_oxygen_editor()) {
+			$available_sessions = $this->get_sandbox_sessions();
+
+			add_action('wp_enqueue_scripts', function () use ($available_sessions) {
+				wp_enqueue_style(self::$module_id . "-oygen-editor");
+				wp_enqueue_script(self::$module_id . "-oygen-editor");
+				wp_localize_script(self::$module_id . "-oygen-editor", 'sandbox', [
+					'session' => $available_sessions['sessions'][$this->selected_session],
+				]);
+			});
+		}
+
+		foreach (array_keys(wp_load_alloptions()) as $option) {
+			if ($this->match_string_prefix('options', $option)) {
+				add_filter("pre_option_{$option}", [$this, 'pre_get_option'], 0, 3);
+				add_filter("pre_update_option_{$option}", [$this, 'pre_update_option'], 0, 3);
+			}
+		}
+
+		add_filter('get_post_metadata', [$this, 'get_post_metadata'], 0, 4);
+		add_filter('update_post_metadata', [$this, 'update_post_metadata'], 0, 5);
+		add_filter('delete_post_metadata', [$this, 'delete_post_metadata'], 0, 5);
+
+		add_action('admin_bar_menu', [$this, 'admin_bar_node'], 100);
+		add_filter('body_class', function ($classes) {
+			return array_merge($classes, [self::$module_id . "-{$this->selected_session}"]);
+		});
+		add_filter('admin_body_class', function ($classes) {
+			return "{$classes} " . self::$module_id . "-{$this->selected_session}";
+		});
+	}
+
+	public function localize_script()
+	{
+		return [
+			'ajax_url'  => admin_url('admin-ajax.php'),
+			'_wpnonce'  => \wp_create_nonce('artifact'),
+			'module_id' => self::$module_id,
+		];
+	}
+
+	public function ajax_rename_session()
+	{
+		wp_verify_nonce($_REQUEST['_wpnonce'], 'artifact');
+
+		$session            = sanitize_text_field($_REQUEST['session']);
+		$new_name           = sanitize_text_field($_REQUEST['new_name']);
+		$available_sessions = $this->get_sandbox_sessions();
+
+		if (array_key_exists($session, $available_sessions['sessions'])) {
+			$old_name = $available_sessions['sessions'][$session]['name'];
+
+			$available_sessions['sessions'][$session]['name'] = $new_name;
+
+			update_option($this->option_name, $available_sessions);
+
+			wp_send_json_success('Sandbox session renamed from ' . $old_name . ' to ' . $new_name);
+		} else {
+			wp_send_json_error('Session not available, could not rename', 422);
+		}
+		exit;
+	}
+
+	public function ajax_update_session()
+	{
+		wp_verify_nonce($_REQUEST['_wpnonce'], 'artifact');
+
+		$session            = sanitize_text_field($_REQUEST['session']);
+		$available_sessions = $this->get_sandbox_sessions();
+
+		if ('false' === $session) {
+			$this->unset_session();
+			wp_send_json_success('Sandbox disabled');
+		} elseif (array_key_exists($session, $available_sessions['sessions'])) {
+			$this->set_session($session);
+			wp_send_json_success('Sandbox session changed to ' . $available_sessions['sessions'][$session]['name']);
+		} else {
+			wp_send_json_error('Session not available', 422);
+		}
+		exit;
+	}
+
+	public function handlePanel()
+	{
+		$available_sessions = $this->get_sandbox_sessions();
+
+		if ($_REQUEST['action'] === 'add') {
+			$random_number = random_int(10000, 99999);
+
+			$available_sessions['sessions'][$random_number] = [
+				'id'     => $random_number,
+				'name'   => "Sandbox #{$random_number}",
+				'secret' => wp_generate_uuid4(),
+			];
+
+			update_option($this->option_name, $available_sessions);
+
+			Notice::success("New sandbox session created with id: #{$random_number}");
+			return true;
+		} elseif (
+			$_SERVER['REQUEST_METHOD'] === 'POST'
+			&& $_REQUEST['action'] === 'import'
+			&& isset($_FILES['sessionfile'])
+		) {
+			$this->import_changes($_FILES['sessionfile']);
+
+			return true;
+		} elseif (
+			$_REQUEST['action'] === 'publish'
+			&& !empty($_REQUEST['session'])
+			&& array_key_exists($_REQUEST['session'], $available_sessions['sessions'])
+		) {
+			$session = sanitize_text_field($_REQUEST['session']);
+			$session_name = $available_sessions['sessions'][$session]['name'];
+			$this->publish_changes($session);
+			$this->delete_changes($session);
+			Notice::success("Sandbox session (name: {$session_name}) published succesfuly.");
+
+			return true;
+		} elseif (
+			$_REQUEST['action'] === 'delete'
+			&& !empty($_REQUEST['session'])
+			&& array_key_exists($_REQUEST['session'], $available_sessions['sessions'])
+		) {
+			$session = sanitize_text_field($_REQUEST['session']);
+			$session_name = $available_sessions['sessions'][$session]['name'];
+
+			$this->delete_changes($session);
+			Notice::success("Sandbox session (name: {$session_name}) deleted succesfuly.");
+
+			return true;
+		} elseif (
+			$_REQUEST['action'] === 'reset_secret'
+			&& !empty($_REQUEST['session'])
+			&& array_key_exists($_REQUEST['session'], $available_sessions['sessions'])
+		) {
+			$session = sanitize_text_field($_REQUEST['session']);
+			$session_name = $available_sessions['sessions'][$session]['name'];
+
+			$this->reset_secret($session);
+			Notice::success("Sandbox session (name: <u><span title=\"ID: {$session}\">{$session_name}</span></u>) token has been reset succesfuly.");
+
+			return true;
+		}
+	}
 
 	protected function is_active(): bool
 	{
-		if ($this->selected_session && current_user_can('manage_options')) {
+		if ($this->get_sandbox_sessions() && current_user_can('manage_options')) {
 			return true;
 		}
 
@@ -122,9 +368,13 @@ class Sandbox extends Module
 		return $random_number;
 	}
 
-	protected function get_sandbox_sessions()
+	public function get_sandbox_sessions()
 	{
-		return get_option($this->option_name);
+		if ($this->sessions === null) {
+			$this->sessions = get_option($this->option_name);
+		}
+
+		return $this->sessions;
 	}
 
 	protected function set_session($session): void
@@ -141,7 +391,7 @@ class Sandbox extends Module
 		update_option($this->option_name, $available_sessions);
 	}
 
-	protected function reset_secrets($session)
+	protected function reset_secret($session)
 	{
 		$available_sessions = $this->get_sandbox_sessions();
 		$available_sessions['sessions'][$session]['secret'] = wp_generate_uuid4();
@@ -210,8 +460,13 @@ class Sandbox extends Module
 
 	public function admin_bar_node(WP_Admin_Bar $wp_admin_bar)
 	{
+		if (false === $this->selected_session) {
+			return;
+		}
+
 		$available_sessions = $this->get_sandbox_sessions();
-		$session_name       = $available_sessions['sessions'][$this->selected_session]['name'];
+		$session            = $available_sessions['sessions'][$this->selected_session];
+		$session_name       = $session['name'];
 
 		$wp_admin_bar->add_node([
 			'parent' => 'top-secondary',
@@ -220,7 +475,10 @@ class Sandbox extends Module
 			'meta'  => [
 				'title' => 'Oxygen Sandbox'
 			],
-			// 'href'  => add_query_arg( [ 'page' => self::$module_id, ], admin_url( 'admin.php' ) )
+			'href'  => add_query_arg([
+				'page' => Artifact::$slug,
+				'route' => 'dashboard#oxygen-sandbox-session-' . $session['id'],
+			], admin_url('admin.php'))
 		]);
 	}
 
@@ -465,11 +723,6 @@ class Sandbox extends Module
 		}
 	}
 
-	/**
-	 * 
-	 * @param mixed $input_file is a $_FILES['sessionfile']
-	 * @return false|void 
-	 */
 	public function import_changes($input_file)
 	{
 		$file = $this->has_valid_file($input_file);
@@ -484,12 +737,12 @@ class Sandbox extends Module
 		unlink($file['file']);
 
 		if (is_array($session) && $this->do_import_session($session)) {
-			// Notice::success( 'Sandbox session successfully imported.', 'Sandbox' );
+			Notice::success('Sandbox session successfully imported.');
 
 			return;
 		}
 
-		// Notice::error( 'No sandbox session found to be imported.', 'Sandbox' );
+		Notice::error('No sandbox session found to be imported.');
 	}
 
 	public function do_import_session($session)
@@ -497,11 +750,12 @@ class Sandbox extends Module
 		$notice_bags = [];
 
 		if (!$this->is_valid_sessionfile_data($session, $notice_bags)) {
-			// $_noticeString = 'Sandbox session could not be imported, invalid format: ';
+			$_noticeString = 'Sandbox session could not be imported, invalid format: ';
 			foreach ($notice_bags as $notice_bag) {
-				// $_noticeString .= "<br/> - {$notice_bag}";
+				$_noticeString .= "<br/> - {$notice_bag}";
 			}
-			// Notice::error( $_noticeString, 'Sandbox' );
+
+			Notice::error($_noticeString);
 
 			return false;
 		}
@@ -577,7 +831,7 @@ class Sandbox extends Module
 		if (
 			!array_key_exists('session_name', $session)
 		) {
-			// $notice_bag[] = "missing session_name";
+			$notice_bag[] = "missing session_name";
 		}
 
 		if (
@@ -632,19 +886,19 @@ class Sandbox extends Module
 
 		if (is_wp_error($file)) {
 			/** @var WP_Error $file */
-			// Notice::error( 'Sandbox session could not be imported: ' . $file->get_error_message(), 'Sandbox' );
+			Notice::error('Sandbox session could not be imported: ' . $file->get_error_message());
 
 			return false;
 		}
 
 		if (isset($file['error'])) {
-			// Notice::error( 'Sandbox session could not be imported: ' . $file['error'], 'Sandbox' );
+			Notice::error('Sandbox session could not be imported: ' . $file['error']);
 
 			return false;
 		}
 
 		if (!isset($file['file'])) {
-			// Notice::error( 'Sandbox session could not be imported: Upload failed.', 'Sandbox' );
+			Notice::error('Sandbox session could not be imported: Upload failed.');
 
 			return false;
 		}

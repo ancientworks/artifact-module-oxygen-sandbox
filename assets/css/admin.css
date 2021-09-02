@@ -1,0 +1,134 @@
+
+.sb-page-title-action {
+  padding: 4px 8px;
+  text-decoration: none;
+  border: 1px solid #2271b1;
+  border-radius: 2px;
+  text-shadow: none;
+  font-weight: 600;
+  font-size: 13px;
+  line-height: normal;
+  color: #2271b1;
+  background: #f6f7f7;
+  cursor: pointer;
+}
+
+.sb-sandbox-card {
+  display: flex;
+  background-color: #fff;
+  border-radius: 10px;
+}
+
+.sb-sandbox-card .sb-card-content {
+  margin-left: 10px;
+  width: 100%;
+}
+.sb-sandbox-card input[type=radio] {
+  margin-top: 0px;
+}
+.sb-sandbox-card input[type=text] {
+  width: 100%;
+}
+.sb-sandbox-card h2 {
+  margin: 0;
+  margin-bottom: 5px;
+}
+.sb-sandbox-card .sb-preview-link {
+  margin-top: 5px;
+  margin-bottom: 5px;
+  display: block;
+}
+.sb-sandbox-card .sb-preview-link-form {
+  position: relative;
+  margin-bottom: 10px;
+}
+.sb-sandbox-card .sb-preview-link-form .sb-sandbox-copy {
+  position: absolute;
+  right: 10px;
+  top: 5px;
+  cursor: pointer;
+}
+.sb-sandbox-card .sb-sandbox-description {
+  border: 0px;
+  padding: 0;
+}
+.sb-sandbox-card input.sb-sandbox-description{
+  padding-left: 5px;
+}
+
+.sb-sandbox-description-wrap{
+  display: flex;
+  align-items: center;
+}
+
+.sb-sandbox-description-wrap:before {
+  display: block;
+  content: '';
+  height: 16px;
+  width: 16px;
+  background-image: url('../img/edit.svg');
+  background-size: cover;
+}
+
+.sb-sandbox-button {
+  line-height: 2.15384615;
+  display: inline-block;
+  min-height: 30px;
+  text-decoration: none;
+  text-shadow: none;
+  margin: 0;
+  padding: 0 10px;
+  cursor: pointer;
+  border-width: 1px;
+  border-style: solid;
+  -webkit-appearance: none;
+  border-radius: 3px;
+  white-space: nowrap;
+  margin-right: 2px;
+  margin-left: 2px;
+  box-sizing: border-box;
+}
+
+.sb-sandbox-button>.dashicons {
+  vertical-align: middle;
+}
+
+.sb-publish-button {
+  color: #2271b1;
+  border-color: #2271b1;
+  background: #f6f7f7;
+}
+
+.sb-publish-button:hover, 
+.sb-export-button:hover,
+.sb-reset-button:hover,
+.sb-delete-button:hover
+{
+  filter: brightness(0.85);
+}
+
+.sb-export-button {
+  color: #6b7278;
+  border: 1px solid #7f868d;
+  background: #f8f9fa;
+}
+
+.sb-reset-button {
+  background: white;
+  border-color: #dba617;
+  color: #dba617;
+}
+
+.sb-reset-button:hover {
+  color: #dba617;
+}
+
+.sb-delete-button {
+  background: white;
+  border-color: #b32d2e;
+  color: #b32d2e;
+}
+
+.sb-delete-button:hover {
+  color: #b32d2e;
+}
