@@ -17,7 +17,7 @@ defined('ABSPATH') || exit; ?>
                   'route' => 'dashboard',
                   'module_id' => Sandbox::$module_id,
                   'action' => 'add',
-                  '_wpnonce' => wp_create_nonce('artifact')
+                  '_wpnonce' => wp_create_nonce(Artifact::$slug)
                 ], admin_url('admin.php')) ?>" class="sb-page-title-action">New Session</a>
       <a class="sb-page-title-action" id="import-session-btn">Import Session</a>
     </div>
@@ -33,7 +33,7 @@ defined('ABSPATH') || exit; ?>
                                                                                               'route' => 'dashboard',
                                                                                               'module_id' => Sandbox::$module_id,
                                                                                               'action' => 'import',
-                                                                                              '_wpnonce' => wp_create_nonce('artifact')
+                                                                                              '_wpnonce' => wp_create_nonce(Artifact::$slug)
                                                                                             ], admin_url('admin.php')) ?>">
             <input type="file" id="sessionfile" name="sessionfile" accept=".json" required="">
             <input type="submit" class="button" value="Import" disabled="">
@@ -84,7 +84,7 @@ defined('ABSPATH') || exit; ?>
                                                                       'module_id' => Sandbox::$module_id,
                                                                       'action' => 'publish',
                                                                       'session' => $value['id'],
-                                                                      '_wpnonce' => wp_create_nonce('artifact')
+                                                                      '_wpnonce' => wp_create_nonce(Artifact::$slug)
                                                                     ], admin_url('admin.php')) ?>">
                 <span class="dashicons dashicons-cloud-saved"></span> Publish
               </a>
@@ -94,7 +94,7 @@ defined('ABSPATH') || exit; ?>
                                                                     'module_id' => Sandbox::$module_id,
                                                                     'action' => 'export',
                                                                     'session' => $value['id'],
-                                                                    '_wpnonce' => wp_create_nonce('artifact')
+                                                                    '_wpnonce' => wp_create_nonce(Artifact::$slug)
                                                                   ], admin_url('admin.php')) ?>">
                 <span class="dashicons dashicons-download"></span> Export
               </a>
@@ -104,7 +104,7 @@ defined('ABSPATH') || exit; ?>
                                                                     'module_id' => Sandbox::$module_id,
                                                                     'action' => 'reset_secret',
                                                                     'session' => $value['id'],
-                                                                    '_wpnonce' => wp_create_nonce('artifact')
+                                                                    '_wpnonce' => wp_create_nonce(Artifact::$slug)
                                                                   ], admin_url('admin.php')) ?>">
                 <span class="dashicons dashicons-update-alt"></span> Reset Link
               </a>
@@ -114,7 +114,7 @@ defined('ABSPATH') || exit; ?>
                                                                     'module_id' => Sandbox::$module_id,
                                                                     'action' => 'delete',
                                                                     'session' => $value['id'],
-                                                                    '_wpnonce' => wp_create_nonce('artifact')
+                                                                    '_wpnonce' => wp_create_nonce(Artifact::$slug)
                                                                   ], admin_url('admin.php')) ?>">
                 <span class="dashicons dashicons-trash"></span> Delete
               </a>

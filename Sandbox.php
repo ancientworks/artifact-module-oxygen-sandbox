@@ -170,14 +170,14 @@ class Sandbox extends Module
 	{
 		return [
 			'ajax_url'  => admin_url('admin-ajax.php'),
-			'_wpnonce'  => \wp_create_nonce('artifact'),
+			'_wpnonce'  => \wp_create_nonce(Artifact::$slug),
 			'module_id' => self::$module_id,
 		];
 	}
 
 	public function ajax_rename_session()
 	{
-		wp_verify_nonce($_REQUEST['_wpnonce'], 'artifact');
+		wp_verify_nonce($_REQUEST['_wpnonce'], Artifact::$slug);
 
 		$session            = sanitize_text_field($_REQUEST['session']);
 		$new_name           = sanitize_text_field($_REQUEST['new_name']);
@@ -199,7 +199,7 @@ class Sandbox extends Module
 
 	public function ajax_update_session()
 	{
-		wp_verify_nonce($_REQUEST['_wpnonce'], 'artifact');
+		wp_verify_nonce($_REQUEST['_wpnonce'], Artifact::$slug);
 
 		$session            = sanitize_text_field($_REQUEST['session']);
 		$available_sessions = $this->get_sandbox_sessions();
