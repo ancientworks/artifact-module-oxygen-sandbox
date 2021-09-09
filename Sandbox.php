@@ -25,7 +25,7 @@ class Sandbox extends Module
 	public static $module_version = '0.0.1';
 	public static $module_name = 'Oxygen Builder Sandbox';
 
-	protected string $option_name = 'artifact_sandbox_sessions';
+	protected string $option_name = 'sandbox_sessions';
 
 	protected bool $active = false;
 
@@ -188,7 +188,7 @@ class Sandbox extends Module
 
 			$available_sessions['sessions'][$session]['name'] = $new_name;
 
-			update_option($this->option_name, $available_sessions);
+			Utils::update_option($this->option_name, $available_sessions);
 
 			wp_send_json_success('Sandbox session renamed from ' . $old_name . ' to ' . $new_name);
 		} else {
@@ -229,7 +229,7 @@ class Sandbox extends Module
 				'secret' => wp_generate_uuid4(),
 			];
 
-			update_option($this->option_name, $available_sessions);
+			Utils::update_option($this->option_name, $available_sessions);
 
 			Notice::success("New sandbox session created with id: #{$random_number}");
 			return true;
@@ -354,7 +354,7 @@ class Sandbox extends Module
 	protected function init_sessions()
 	{
 		$random_number = random_int(10000, 99999);
-		update_option($this->option_name, [
+		Utils::update_option($this->option_name, [
 			'selected' => $random_number,
 			'sessions' => [
 				$random_number => [
@@ -371,7 +371,7 @@ class Sandbox extends Module
 	public function get_sandbox_sessions()
 	{
 		if ($this->sessions === null) {
-			$this->sessions = get_option($this->option_name);
+			$this->sessions = Utils::get_option($this->option_name);
 		}
 
 		return $this->sessions;
@@ -381,21 +381,21 @@ class Sandbox extends Module
 	{
 		$available_sessions = $this->get_sandbox_sessions();
 		$available_sessions['selected'] = $session;
-		update_option($this->option_name, $available_sessions);
+		Utils::update_option($this->option_name, $available_sessions);
 	}
 
 	protected function unset_session(): void
 	{
 		$available_sessions = $this->get_sandbox_sessions();
 		$available_sessions['selected'] = false;
-		update_option($this->option_name, $available_sessions);
+		Utils::update_option($this->option_name, $available_sessions);
 	}
 
 	protected function reset_secret($session)
 	{
 		$available_sessions = $this->get_sandbox_sessions();
 		$available_sessions['sessions'][$session]['secret'] = wp_generate_uuid4();
-		update_option($this->option_name, $available_sessions);
+		Utils::update_option($this->option_name, $available_sessions);
 	}
 
 	public function pre_get_option($pre_option, string $option, $default)
@@ -404,7 +404,7 @@ class Sandbox extends Module
 			return 'false';
 		}
 
-		if (DB::has('options', ['option_name' => self::$module_id . "_{$this->selected_session}_{$option}",])) {
+		if (DB::db()->has('options', ['option_name' => self::$module_id . "_{$this->selected_session}_{$option}",])) {
 			$pre_option = get_option(self::$module_id . "_{$this->selected_session}_{$option}", $default);
 		}
 
@@ -519,7 +519,7 @@ class Sandbox extends Module
 
 	protected function retrieve_sandbox_options($session)
 	{
-		$options = DB::select('options', [
+		$options = DB::db()->select('options', [
 			'option_id',
 			'option_name',
 			'option_value',
@@ -540,7 +540,7 @@ class Sandbox extends Module
 
 	protected function retrieve_sandbox_postmeta($session)
 	{
-		$postmetas = DB::select('postmeta', [
+		$postmetas = DB::db()->select('postmeta', [
 			'meta_id',
 			'post_id',
 			'meta_key',
@@ -576,7 +576,7 @@ class Sandbox extends Module
 
 	public function publish_sandbox_options($session): void
 	{
-		$options = DB::select('options', [
+		$options = DB::db()->select('options', [
 			'option_id',
 			'option_name',
 			'option_value',
@@ -589,17 +589,17 @@ class Sandbox extends Module
 				$option       = (object) $option;
 				$_option_name = self::ltrim($option->option_name, self::$module_id . "_{$session}_");
 
-				$existing_option = DB::get('options', 'option_id', [
+				$existing_option = DB::db()->get('options', 'option_id', [
 					'option_name' => $_option_name
 				]);
 
 				if ($existing_option) {
-					DB::delete('options', [
+					DB::db()->delete('options', [
 						'option_id' => $existing_option,
 					]);
 				}
 
-				DB::update('options', [
+				DB::db()->update('options', [
 					'option_name' => $_option_name,
 				], [
 					'option_id' => $option->option_id,
@@ -610,7 +610,7 @@ class Sandbox extends Module
 
 	public function publish_sandbox_postmeta($session): void
 	{
-		$postmetas = DB::select('postmeta', [
+		$postmetas = DB::db()->select('postmeta', [
 			'meta_id',
 			'post_id',
 			'meta_key',
@@ -624,18 +624,18 @@ class Sandbox extends Module
 				$postmeta      = (object) $postmeta;
 				$_postmeta_key = self::ltrim($postmeta->meta_key, self::$module_id . "_{$session}_");
 
-				$existing_postmeta = DB::get('postmeta', 'meta_id', [
+				$existing_postmeta = DB::db()->get('postmeta', 'meta_id', [
 					'post_id'  => $postmeta->post_id,
 					'meta_key' => $_postmeta_key,
 				]);
 
 				if ($existing_postmeta) {
-					DB::delete('postmeta', [
+					DB::db()->delete('postmeta', [
 						'meta_id' => $existing_postmeta,
 					]);
 				}
 
-				DB::update('postmeta', [
+				DB::db()->update('postmeta', [
 					'meta_key' => $_postmeta_key,
 				], [
 					'meta_id' => $postmeta->meta_id,
@@ -659,19 +659,19 @@ class Sandbox extends Module
 			return $k !== (int) $session;
 		}, ARRAY_FILTER_USE_BOTH);
 
-		update_option($this->option_name, $available_sessions);
+		Utils::update_option($this->option_name, $available_sessions);
 	}
 
 	protected function delete_sandbox_options($session): void
 	{
-		DB::delete('options', [
+		DB::db()->delete('options', [
 			'option_name[~]' => self::$module_id . "_{$session}_%"
 		]);
 	}
 
 	protected function delete_sandbox_postmeta($session): void
 	{
-		DB::delete('postmeta', [
+		DB::db()->delete('postmeta', [
 			'meta_key[~]' => self::$module_id . "_{$session}_%"
 		]);
 	}
@@ -689,14 +689,14 @@ class Sandbox extends Module
 	{
 		$session = (object) $session;
 
-		DB::delete('options', [
+		DB::db()->delete('options', [
 			'option_name[~]' => self::$module_id . "_{$session->session_id}_%"
 		]);
 
 		foreach ($session->data['options'] as $option) {
 			$option = (object) $option;
 
-			DB::insert('options', [
+			DB::db()->insert('options', [
 				'option_name'  => self::$module_id . "_{$session->session_id}_{$option->option_name}",
 				'option_value' => base64_decode($option->option_value),
 				'autoload'     => $option->autoload
@@ -708,14 +708,14 @@ class Sandbox extends Module
 	{
 		$session = (object) $session;
 
-		DB::delete('postmeta', [
+		DB::db()->delete('postmeta', [
 			'meta_key[~]' => self::$module_id . "_{$session->session_id}_%"
 		]);
 
 		foreach ($session->data['postmeta'] as $postmeta) {
 			$postmeta = (object) $postmeta;
 
-			DB::insert('postmeta', [
+			DB::db()->insert('postmeta', [
 				'post_id'    => $postmeta->post_id,
 				'meta_key'   => self::$module_id . "_{$session->session_id}_{$postmeta->meta_key}",
 				'meta_value' => base64_decode($postmeta->meta_value),
@@ -766,7 +766,7 @@ class Sandbox extends Module
 			'name'   => $session['session_name'] ?? "Sandbox #" . $session['session_id'],
 			'secret' => $session['session_secret'],
 		];
-		update_option($this->option_name, $available_sessions);
+		Utils::update_option($this->option_name, $available_sessions);
 
 		$this->import_sandbox_options($session);
 		$this->import_sandbox_postmeta($session);
